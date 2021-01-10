@@ -30,6 +30,7 @@ const elements = {
   settings: '*[data-test^="open-settings"]',
   media: '*[data-test="current-media-imagery"]',
   image: "img",
+  url: '*[data-test="footer-track-title"]',
 
   /**
    * Get an element from the dom
@@ -52,6 +53,20 @@ const elements = {
       }
     }
 
+    return "";
+  },
+
+  /**
+   * Function to obtain the listen.tidal.com media url
+   */
+  getMediaUrl: function () {
+    const mediaUrlElement = this.get("url");
+    if (mediaUrlElement) {
+      const linkTag = mediaUrlElement.querySelector("a");
+      if (linkTag) {
+        return linkTag.href;
+      }
+    }
     return "";
   },
 
@@ -130,6 +145,11 @@ function addHotKeys() {
       elements.click("repeat");
     });
   }
+
+  // optionally add shell integration
+  hotkeys.add("control+b", function () {
+    ipcRenderer.send(globalEvents.callScript);
+  });
 
   // always add the hotkey for the settings window
   hotkeys.add("control+=", function () {
@@ -225,6 +245,7 @@ setInterval(function () {
   const title = elements.getText("title");
   const artists = elements.getText("artists");
   const songDashArtistTitle = `${title} - ${artists}`;
+  const mediaUrl = elements.getMediaUrl();
 
   updateStatus();
 
@@ -238,6 +259,8 @@ setInterval(function () {
       const options = {
         title,
         message: artists,
+        url: mediaUrl,
+        appID: "Tidal-hifi",
       };
       new Promise((resolve, reject) => {
         if (image.startsWith("http")) {

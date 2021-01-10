@@ -10,6 +10,7 @@ const globalEvents = {
   updateStatus: "update-status",
   storeChanged: "storeChanged",
   error: "error",
+  callScript: "call-script",
 };
 
 module.exports = globalEvents;

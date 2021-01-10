@@ -73,6 +73,7 @@ const mainMenu = [
       { role: "zoomout" },
       { type: "separator" },
       { role: "togglefullscreen" },
+      { role: "toggleDevTools" },
     ],
   },
   // { role: 'windowMenu' }

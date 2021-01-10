@@ -118,3 +118,8 @@ ipcMain.on(globalEvents.storeChanged, (event, arg) => {
 ipcMain.on(globalEvents.error, (event, arg) => {
   console.log(event);
 });
+
+ipcMain.on(globalEvents.callScript, (event, arg) => {
+  // , [mediaInfoModule.mediaInfo]
+  // call a script
+});
