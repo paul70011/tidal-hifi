@@ -9,6 +9,7 @@ const hotkeys = require("./scripts/hotkeys");
 const globalEvents = require("./constants/globalEvents");
 const notifier = require("node-notifier");
 const notificationPath = `${app.getPath("userData")}/notification.jpg`;
+const playQueueScroll = require("./scripts/playQueueScroll")
 let currentSong = "";
 let player;
 
