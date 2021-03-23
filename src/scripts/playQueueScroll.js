@@ -4,7 +4,7 @@ function scrollToCurrentPlayQueueItem(){
     let scrollDown = false
 
     for(let item of items){
-        if(parseInt(item.style.height) > 59){
+        if(parseInt(item.style.height) > 64){
             playQueueItems.scrollTop = parseInt(item.style.top)
             return
         }
@@ -23,21 +23,31 @@ function scrollToCurrentPlayQueueItem(){
 
 function createToCurrentButton(){
     const playQueueSidebar = document.querySelector("#playQueueSidebar")
+    const saveQueueWrapper = playQueueSidebar.querySelector("div[class*='tooltip']")
+    const buttonsContainer = saveQueueWrapper.parentNode
 
-    const buttonClasses = [...playQueueSidebar.querySelector("[class*='header']").querySelector("[class*='button']").classList]
+    const wrapperClasses = [...saveQueueWrapper.classList]
+    const buttonClasses = [...saveQueueWrapper.querySelector("button").classList]
+    const tooltipClasses = [...saveQueueWrapper.querySelector("span").classList]
 
     const toCurrentButton = document.createElement("button")
-    toCurrentButton.innerText = "Currently Playing"
+    const playIcon = document.querySelector("[data-type='button__pause'] svg").cloneNode(true)
+    toCurrentButton.appendChild(playIcon)
     toCurrentButton.classList.add(...buttonClasses)
-
-    const header = playQueueSidebar.querySelector("[class*='header']")
-    const saveButton = header.querySelector("button")
-
-    header.insertBefore(toCurrentButton, saveButton)
-
     toCurrentButton.addEventListener("click", () => {
         scrollToCurrentPlayQueueItem()
     })
+
+    const toCurrentTooltip = document.createElement("span")
+    toCurrentTooltip.innerText = "CURRENTLY PLAYING"
+    toCurrentTooltip.classList.add(...tooltipClasses)
+
+    const toCurrentWrapper = document.createElement("div")
+    toCurrentWrapper.classList.add(...wrapperClasses)
+    toCurrentWrapper.appendChild(toCurrentButton)
+    toCurrentWrapper.appendChild(toCurrentTooltip)
+
+    buttonsContainer.appendChild(toCurrentWrapper)
 }
 
 setTimeout(() => {
@@ -49,6 +59,5 @@ setTimeout(() => {
             }, 50)
         }
     })
-    
     observer.observe(document.querySelector("#playQueueSidebar"), {attributes: true})
-}, 2000)
+}, 4000)
