@@ -50,7 +50,12 @@ function createToCurrentButton(){
     buttonsContainer.appendChild(toCurrentWrapper)
 }
 
-setTimeout(() => {
+function attachMutationObserver(){
+    const playQueueSidebar = document.querySelector("#playQueueSidebar")
+    if(!playQueueSidebar){
+        setTimeout(attachMutationObserver, 1000)
+        return
+    }
     let observer = new MutationObserver(mutations => {
         if([...mutations[0].target.classList].reduce(c => c.includes("containerIsOpen"))){
             setTimeout(() => {
@@ -59,5 +64,7 @@ setTimeout(() => {
             }, 50)
         }
     })
-    observer.observe(document.querySelector("#playQueueSidebar"), {attributes: true})
-}, 4000)
+    observer.observe(playQueueSidebar, {attributes: true})
+}
+
+setTimeout(attachMutationObserver, 1000)
