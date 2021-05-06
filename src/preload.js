@@ -1,4 +1,4 @@
-const { setTitle, getTitle } = require("./scripts/window-functions");
+const { setTitle } = require("./scripts/window-functions");
 const { dialog, process } = require("electron").remote;
 const { store, settings } = require("./scripts/settings");
 const { ipcRenderer } = require("electron");
@@ -12,6 +12,11 @@ const notificationPath = `${app.getPath("userData")}/notification.jpg`;
 const playQueueScroll = require("./scripts/playQueueScroll")
 let currentSong = "";
 let player;
+let currentPlayStatus = statuses.paused;
+let progressBarTime;
+let currentTimeChanged = false;
+let currentTime;
+let currentURL = undefined;
 
 const elements = {
   play: '*[data-test="play"]',
@@ -19,7 +24,7 @@ const elements = {
   next: '*[data-test="next"]',
   previous: 'button[data-test="previous"]',
   title: '*[data-test^="footer-track-title"]',
-  artists: '*[class^="mediaArtists"]',
+  artists: '*[class^="elemental__text elemental__text css-oxcos"]',
   home: '*[data-test="menu--home"]',
   back: '[class^="backwardButton"]',
   forward: '[class^="forwardButton"]',
@@ -31,6 +36,9 @@ const elements = {
   settings: '*[data-test^="open-settings"]',
   media: '*[data-test="current-media-imagery"]',
   image: "img",
+  current: '*[data-test="current-time"]',
+  duration: '*[data-test="duration-time"]',
+  bar: '*[data-test="progress-bar"]',
 
   /**
    * Get an element from the dom
@@ -156,8 +164,8 @@ function handleLogout() {
     },
     function (response) {
       if (logoutOptions.indexOf("Yes, please") == response) {
-        for (i = 0; i < window.localStorage.length; i++) {
-          key = window.localStorage.key(i);
+        for (let i = 0; i < window.localStorage.length; i++) {
+          const key = window.localStorage.key(i);
           if (key.startsWith("_TIDAL_activeSession")) {
             window.localStorage.removeItem(key);
             i = window.localStorage.length + 1;
@@ -200,9 +208,9 @@ function addIPCEventListeners() {
 /**
  * Update the current status of tidal (e.g playing or paused)
  */
-function updateStatus() {
+function getCurrentlyPlayingStatus() {
   let pause = elements.get("pause");
-  let status;
+  let status = undefined;
 
   // if pause button is visible tidal is playing
   if (pause) {
@@ -210,12 +218,47 @@ function updateStatus() {
   } else {
     status = statuses.paused;
   }
+  return status;
+}
 
-  if (status) {
-    ipcRenderer.send(globalEvents.updateStatus, status);
+/**
+ * Update Tidal-hifi's media info
+ *
+ * @param {*} options
+ */
+function updateMediaInfo(options, notify) {
+  if (options) {
+    ipcRenderer.send(globalEvents.updateInfo, options);
+    store.get(settings.notifications) && notify && notifier.notify(options);
+
     if (player) {
-      player.playbackStatus = status == statuses.paused ? "Paused" : "Playing";
+      player.metadata = {
+        ...player.metadata,
+        ...{
+          "xesam:title": options.title,
+          "xesam:artist": [options.artists],
+          "mpris:artUrl": options.image,
+        },
+      };
+      player.playbackStatus = options.status == statuses.paused ? "Paused" : "Playing";
     }
+  }
+}
+
+/**
+ * Checks if Tidal is playing a video or song by grabbing the "a" element from the title.
+ * If it's a song it sets the track URL as currentURL, If it's a video it will set currentURL to undefined.
+ */
+function updateURL() {
+  const URLelement = elements.get("title").querySelector("a");
+  switch (URLelement) {
+    case null:
+      currentURL = undefined;
+      break;
+    default:
+      const id = URLelement.href.replace(/[^0-9]/g, "");
+      currentURL = `https://tidal.com/browse/track/${id}`;
+      break;
   }
 }
 
@@ -225,56 +268,76 @@ function updateStatus() {
 setInterval(function () {
   const title = elements.getText("title");
   const artists = elements.getText("artists");
+  const current = elements.getText("current");
+  const duration = elements.getText("duration");
+  const progressBarcurrentTime = elements.get("bar").getAttribute("aria-valuenow");
   const songDashArtistTitle = `${title} - ${artists}`;
+  const currentStatus = getCurrentlyPlayingStatus();
+  const options = {
+    title,
+    message: artists,
+    status: currentStatus,
+    url: currentURL,
+    current: current,
+    duration: duration,
+  };
 
-  updateStatus();
+  const playStatusChanged = currentStatus !== currentPlayStatus;
+  const progressBarTimeChanged = progressBarcurrentTime !== progressBarTime;
+  const titleOrArtistChanged = currentSong !== songDashArtistTitle;
 
-  if (getTitle() !== songDashArtistTitle) {
+  if (titleOrArtistChanged || playStatusChanged || progressBarTimeChanged || currentTimeChanged) {
+    // update title, url and play info with new info
     setTitle(songDashArtistTitle);
+    updateURL();
+    currentSong = songDashArtistTitle;
+    currentPlayStatus = currentStatus;
 
-    if (currentSong !== songDashArtistTitle) {
-      currentSong = songDashArtistTitle;
-      const image = elements.getSongIcon();
-
-      const options = {
-        title,
-        message: artists,
-      };
-      new Promise((resolve, reject) => {
-        if (image.startsWith("http")) {
-          downloadFile(image, notificationPath).then(
-            () => {
-              options.icon = notificationPath;
-              resolve();
-            },
-            () => {
-              // if the image can't be downloaded then continue without it
-              resolve();
-            }
-          );
-        } else {
-          // if the image can't be found on the page continue without it
-          resolve();
-        }
-      }).then(
-        () => {
-          ipcRenderer.send(globalEvents.updateInfo, options);
-          store.get(settings.notifications) && notifier.notify(options);
-
-          if (player) {
-            player.metadata = {
-              ...player.metadata,
-              ...{
-                "xesam:title": title,
-                "xesam:artist": [artists],
-                "mpris:artUrl": image,
-              },
-            };
-          }
-        },
-        () => {}
-      );
+    // check progress bar value and make sure current stays up to date after switch
+    if(progressBarTime != progressBarcurrentTime && !titleOrArtistChanged) {
+      progressBarTime = progressBarcurrentTime;
+      currentTime = options.current;
+      options.duration = duration;
+      currentTimeChanged = true;
     }
+
+    if(currentTimeChanged) {
+      if(options.current == currentTime && currentStatus != "paused") return;
+      currentTime = options.current;
+      currentTimeChanged = false;
+    }
+
+    // make sure current is set to 0 if title changes
+    if(titleOrArtistChanged) {
+      options.current = "0:00";
+      currentTime = options.current;
+      progressBarTime = progressBarcurrentTime;
+    }
+
+    const image = elements.getSongIcon();
+
+    new Promise((resolve) => {
+      if (image.startsWith("http")) {
+        downloadFile(image, notificationPath).then(
+          () => {
+            options.icon = notificationPath;
+            resolve();
+          },
+          () => {
+            // if the image can't be downloaded then continue without it
+            resolve();
+          }
+        );
+      } else {
+        // if the image can't be found on the page continue without it
+        resolve();
+      }
+    }).then(
+      () => {
+        updateMediaInfo(options, titleOrArtistChanged);
+      },
+      () => {}
+    );
   }
 }, 200);
 
